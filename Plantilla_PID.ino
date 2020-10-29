@@ -55,7 +55,7 @@ void loop()
         errorAnt = error;
         pasado = ahora;
 
-        U=constrain(MV, LimiteInferir,LimiteSuperior);
+        MV=constrain(U, LimiteInferir,LimiteSuperior);
 	}
 }
 
