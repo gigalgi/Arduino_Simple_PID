@@ -1,61 +1,77 @@
+// Simple PID Controller Template for Arduino
+// Author: Gilberto Garcia
 
+int sampleTime = 300;           // sample time in milliseconds
+unsigned long timePrev = 0;     // previous time
+unsigned long timeNow = 0;      // current time
+int deltaTime = 0;              // actual elapsed time
 
-int TiempoMuestreo = 300;        // tiempo de muestreo Se encuentra en milisegundos
-unsigned long pasado = 0;      // tiempo pasado (Se hace para asegurar tiempo de muestreo)
-unsigned long ahora = 0;			// tiempo que se lleva ejecutando el programa
-int CambioTiempo;				//diferencia entre el tiempo actual de ejecucion y el tiempoa anterir de ejecucion para calcular el tiempo de muestreo
+int setpoint = 90;              // target value
+int processVariable = 0;        // measured value from sensor
 
-int Setpoint = 90;              // referencia 
-int VariableProceso = 0			//variable de proceso
-int LimiteSuperior = 255;		//limite superir de la señal de salida de control
-int LimiteInferir = 0;			//limite inferior de la señal de salida de control
+int outputMax = 255;            // upper output limit
+int outputMin = 0;              // lower output limit
 
-double error = 0;                // error
-double errorInt = 0;           //error para la integral
-double errorIAnt = 0;         // Suma de errores anteriores para la parte integral  
-double errorDer = 0;			// error para la derivada
-double errorAnt = 0;			// error anterior
+double error = 0;
+double errorPrev = 0;
+double errorIntegral = 0;
+double errorDerivative = 0;
 
-double U = 0;  					// Señal de control limitada en el rango del actuador
-double P = 0;                    // control proporcional
-double I = 0;                    // control integral
-double D = 0;                    // control derivativo 
-double MV = 0;					//variable manipulada
-double Kp = 0.0205;				//ganancia proporcional
-double Ki = 0.00022;			//ganacia integral
-double Kd = 0;					//ganancia derivativa
+double U = 0;                   // raw PID output
+double P = 0;
+double I = 0;
+double D = 0;
+double MV = 0;                  // clamped output
 
+double Kp = 0.0205;
+double Ki = 0.00022;
+double Kd = 0;
 
-
- 
-void setup()
-{
-
+void setup() {
+  Serial.begin(9600);
 }
 
-void loop() 
-{
-  ahora = millis();
-  CambioTiempo = ahora - pasado;
-  
-  if(CambioTiempo >= TiempoMuestreo)                    
-    {
-        error = Setpoint - VariableProceso; 
-        errorInt = (((error + errorAnt) / 2) * TiempoMuestreo) + errorIAnt;//probar con CambioTiempo en ves de TiempoMuestreo      
-        errorDer = (error - errorAnt) / TiempoMuestreo;// probar con CambioTiempo en ves de TiempoMuestreo
-    
-        P = Kp * error;                                
-        I = Ki * errorInt;                            
-        D = Kd * errorDer;
-        U = P + I + D;                                            
-        
-        errorIAnt = errorInt;
-        errorAnt = error;
-        pasado = ahora;
+void loop() {
+  timeNow = millis();
+  deltaTime = timeNow - timePrev;
 
-        MV = constrain(U, LimiteInferir, LimiteSuperior)
+  if (deltaTime >= sampleTime) {
+
+    // read your sensor here
+    // processVariable = analogRead(A0);
+
+    error = setpoint - processVariable;
+
+    // trapezoidal integration
+    errorIntegral = ((error + errorPrev) / 2.0 * deltaTime) + errorIntegral;
+
+    // anti-windup: freeze integral when output is saturated
+    if (MV >= outputMax || MV <= outputMin) {
+      errorIntegral -= (error + errorPrev) / 2.0 * deltaTime;
     }
-}
 
-  
- 
+    // derivative using real elapsed time
+    errorDerivative = (error - errorPrev) / deltaTime;
+
+    P = Kp * error;
+    I = Ki * errorIntegral;
+    D = Kd * errorDerivative;
+
+    U = P + I + D;
+    MV = constrain(U, outputMin, outputMax);
+
+    // write to your actuator here
+    // analogWrite(PIN, MV);
+
+    // serial debug
+    Serial.print("SP:"); Serial.print(setpoint);
+    Serial.print(" PV:"); Serial.print(processVariable);
+    Serial.print(" P:"); Serial.print(P);
+    Serial.print(" I:"); Serial.print(I);
+    Serial.print(" D:"); Serial.print(D);
+    Serial.print(" Out:"); Serial.println(MV);
+
+    errorPrev = error;
+    timePrev = timeNow;
+  }
+}
